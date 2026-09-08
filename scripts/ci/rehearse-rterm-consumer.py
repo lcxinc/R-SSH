@@ -269,6 +269,11 @@ def run_mode(
         "commands": commands,
     }
     write_json_atomic(output / f"{mode}.json", evidence)
+    if not evidence["ok"]:
+        failed = next(command for command in commands if command["returncode"] != 0)
+        # Include bounded, JSON-escaped command output in the job log as well
+        # as the artifact, so failed hosted jobs remain diagnosable.
+        print(json.dumps({"mode": mode, "failed_command": failed}, sort_keys=True), file=sys.stderr)
     return evidence, probe_root
 
 
