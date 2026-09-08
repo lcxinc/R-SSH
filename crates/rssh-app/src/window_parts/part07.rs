@@ -1425,6 +1425,11 @@ enum NativeStartupMode {
     Diagnostic(NativeDiagnosticGuiState),
 }
 
+struct NativeStartupState {
+    mode: NativeStartupMode,
+    diagnostic_gpu_backend: Option<rssh_diagnostics::DiagnosticGpuBackend>,
+}
+
 #[allow(clippy::struct_excessive_bools)]
 struct NativeWindowApp {
     app_window_id: rssh_core::WindowId,
@@ -1454,10 +1459,9 @@ struct NativeWindowApp {
     bootstrap_surface: Option<WindowBootstrapSurface>,
     bootstrap_frame: Vec<u8>,
     renderer_mode: RendererMode,
-    diagnostic_gpu_backend: Option<rssh_diagnostics::DiagnosticGpuBackend>,
     presentation_owner: PresentationOwner,
     deferred_gpu_generation: u64,
-    startup_mode: NativeStartupMode,
+    startup: NativeStartupState,
     transport_start_requested: bool,
     // Prompts are keyed by pane so a slow host-key or secret decision in one
     // SSH pane cannot overwrite another pane's independent connection.

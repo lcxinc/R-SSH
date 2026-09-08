@@ -1086,6 +1086,13 @@ pub(crate) enum CatalogFrameAttempt<T> {
     Expanded(u64),
 }
 
+fn font_fallback_redraw_needed(
+    repository: &PlatformFontRepository,
+    report: &GpuTextPrepareReport,
+) -> bool {
+    repository.has_pending_fallbacks(&report.missing_glyphs)
+}
+
 pub(crate) fn prepare_catalog_frame_with_one_restart<T>(
     mut expected_generation: u64,
     damage: &[DamageRegion],
@@ -1765,6 +1772,18 @@ impl WindowGpu {
             self.context_mut().inject_device_loss_for_test();
             self.test_device_loss_injected = true;
         }
+        // A bounded late activation can leave another candidate for a static
+        // row. Repaint all rows on its explicit continuation, even without input
+        // damage or cursor animation.
+        let render_mode = if self
+            .report
+            .as_ref()
+            .is_some_and(|report| font_fallback_redraw_needed(&self.font_repository, report))
+        {
+            rssh_native::RenderMode::Full
+        } else {
+            render_mode
+        };
         let frame = WindowGpuFrame {
             window,
             snapshot,
@@ -1826,6 +1845,9 @@ impl WindowGpu {
             )?;
             #[cfg(not(feature = "diagnostic-tools"))]
             debug_assert!(this.diagnostic_font_resources.is_none());
+            if font_fallback_redraw_needed(&this.font_repository, &report) {
+                window.request_redraw();
+            }
             this.report = Some(report);
             this.rendered_frames = this.rendered_frames.saturating_add(1);
         }
@@ -2740,6 +2762,80 @@ mod tests {
         let diagnostics = repository.diagnostics();
         assert_eq!(diagnostics.active_source_count, 3);
         assert_eq!(diagnostics.generation, 3);
+    }
+
+    #[test]
+    fn gpu_text_frame_static_missing_fallback_requests_a_full_followup_until_exhausted() {
+        let context = pollster::block_on(GpuContext::new_headless(GpuContextOptions::default()))
+            .expect("headless adapter");
+        let mut repository = PlatformFontRepository::repeated_late_missing_fixture();
+        let catalog = repository
+            .build_catalog(FontCatalogMode::Lazy)
+            .expect("primary catalog");
+        let mut renderer =
+            GpuLayerRenderer::new_headless(&context, 64 * 1024).expect("GPU layer renderer");
+        renderer
+            .enable_text(
+                catalog,
+                bundled_emergency_font_config(),
+                GpuTextConfig::new(
+                    4 * 1024 * 1024,
+                    rssh_fonts::RasterCacheConfig::new(4 * 1024 * 1024),
+                ),
+            )
+            .expect("GPU text");
+        let mut terminal = Terminal::new(TerminalSize::new(8, 2));
+        terminal.feed("中文\r\nASCII".as_bytes());
+        let snapshot = TerminalRenderSnapshot::from_terminal(&terminal);
+        let geometry = RenderGeometry::new(8 * 16, 2 * 24, 16, 24);
+        let paint = TextPaintConfig::default();
+        let first = prepare_gpu_text_frame(
+            &mut repository,
+            &mut renderer,
+            &snapshot,
+            geometry,
+            &[],
+            &paint,
+            1.0,
+            1.0,
+        )
+        .expect("one bounded restart leaves another candidate");
+        assert_eq!(first.catalog_generation, 3);
+        assert!(!first.missing_glyphs.is_empty());
+        assert!(font_fallback_redraw_needed(&repository, &first));
+        let followup = prepare_gpu_text_frame(
+            &mut repository,
+            &mut renderer,
+            &snapshot,
+            geometry,
+            &[],
+            &paint,
+            1.0,
+            1.0,
+        )
+        .expect("explicit full redraw without input or animation");
+        assert_eq!(followup.catalog_generation, 4);
+        assert!(followup.missing_glyphs.is_empty());
+        assert_eq!(followup.prepared_rows, [0, 1]);
+        assert!(!font_fallback_redraw_needed(&repository, &followup));
+        // Even a report that still contains classified CJK misses cannot
+        // schedule forever once every CJK candidate has been consumed.
+        assert!(!font_fallback_redraw_needed(&repository, &first));
+
+        terminal.feed("\r\n\u{10ffff}".as_bytes());
+        let missing = prepare_gpu_text_frame(
+            &mut repository,
+            &mut renderer,
+            &TerminalRenderSnapshot::from_terminal(&terminal),
+            geometry,
+            &[],
+            &paint,
+            1.0,
+            1.0,
+        )
+        .expect("unsupported glyph remains stable");
+        assert!(!missing.missing_glyphs.is_empty());
+        assert!(!font_fallback_redraw_needed(&repository, &missing));
     }
 
     #[test]

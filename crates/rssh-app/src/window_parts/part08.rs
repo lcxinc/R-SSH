@@ -567,10 +567,12 @@ impl NativeWindowApp {
                 // the SSH GUI entry point overrides this with the requested
                 // hybrid/cpu mode before the event loop starts.
                 renderer_mode: RendererMode::Gpu,
-                diagnostic_gpu_backend: None,
                 presentation_owner: PresentationOwner::Bootstrap,
                 deferred_gpu_generation: 0,
-                startup_mode: NativeStartupMode::Normal,
+                startup: NativeStartupState {
+                    mode: NativeStartupMode::Normal,
+                    diagnostic_gpu_backend: None,
+                },
                 transport_start_requested: false,
                 ssh_host_key_prompts: HashMap::new(),
                 ssh_secret_prompts: HashMap::new(),
@@ -760,7 +762,7 @@ impl NativeWindowApp {
     }
 
     fn set_benchmark_startup(&mut self, enabled: bool) {
-        self.startup_mode = if enabled {
+        self.startup.mode = if enabled {
             NativeStartupMode::Benchmark
         } else {
             NativeStartupMode::Normal
@@ -7406,14 +7408,14 @@ impl NativeWindowApp {
             matches!(self.front_end, NativeRenderFrontEnd::Software),
         );
         let (font_mode, font_specimen) = self.diagnostic_font_options();
-        if self.diagnostic_gpu_backend.is_some() || font_mode.is_some() {
+        if self.startup.diagnostic_gpu_backend.is_some() || font_mode.is_some() {
             pollster::block_on(WindowGpu::new_with_diagnostic_options(
                 event_loop.owned_display_handle(),
                 window,
                 size,
                 high_performance,
                 force_fallback_adapter,
-                self.diagnostic_gpu_backend,
+                self.startup.diagnostic_gpu_backend,
                 font_mode,
                 font_specimen,
             ))
@@ -7473,14 +7475,14 @@ impl NativeWindowApp {
             matches!(self.front_end, NativeRenderFrontEnd::Software),
         );
         let (font_mode, font_specimen) = self.diagnostic_font_options();
-        let prepared_gpu = match if self.diagnostic_gpu_backend.is_some() || font_mode.is_some() {
+        let prepared_gpu = match if self.startup.diagnostic_gpu_backend.is_some() || font_mode.is_some() {
             WindowGpu::prepare_with_diagnostic_options(
                 display,
                 window,
                 surface_size,
                 high_performance,
                 force_fallback_adapter,
-                self.diagnostic_gpu_backend,
+                self.startup.diagnostic_gpu_backend,
                 font_mode,
                 font_specimen,
             )

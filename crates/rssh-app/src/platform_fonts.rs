@@ -561,6 +561,13 @@ impl PlatformFontRepository {
         self.activate_plan(&plan, catalog)
     }
 
+    pub(crate) fn has_pending_fallbacks(&self, missing_glyphs: &[char]) -> bool {
+        !self
+            .plan_required_sources(missing_glyphs.iter().copied(), false)
+            .required
+            .is_empty()
+    }
+
     pub(crate) fn preflight_snapshot(
         &mut self,
         snapshot: &rterm_render_core::TerminalRenderSnapshot,
@@ -793,7 +800,14 @@ fn coverage_for_character(character: char) -> Option<FontCoverage> {
     if matches!(scalar, 0x0900..=0x097f | 0xa8e0..=0xa8ff) {
         return Some(FontCoverage::Devanagari);
     }
-    if matches!(scalar, 0x2e80..=0x9fff | 0xac00..=0xd7af | 0xf900..=0xfaff | 0x20000..=0x3134f) {
+    // Include compatibility/vertical/small forms and all Hangul Jamo blocks,
+    // not just ideographs and precomposed syllables.
+    if matches!(
+        scalar,
+        0x1100..=0x11ff | 0x2e80..=0x9fff | 0xa960..=0xa97f | 0xac00..=0xd7ff
+            | 0xf900..=0xfaff | 0xfe10..=0xfe1f | 0xfe30..=0xfe6f
+            | 0xff00..=0xffef | 0x20000..=0x3134f
+    ) {
         return Some(FontCoverage::Cjk);
     }
     if matches!(scalar, 0x1f000..=0x1faff | 0x2600..=0x27bf) {
@@ -1164,6 +1178,78 @@ mod tests {
             CatalogActivation::Unchanged
         );
         assert_eq!(repository.diagnostics(), activated);
+    }
+
+    #[test]
+    fn platform_fonts_width_variants_activate_cjk_without_ideographs() {
+        for text in ["！", "Ａ", "ｦ", "ﾡ", "￦", "︐", "︰", "﹐", "ᄀ", "ꥠ", "ힰ"] {
+            let mut repository = fixture_repository();
+            let mut catalog = repository
+                .build_catalog(FontCatalogMode::Lazy)
+                .expect("build primary catalog");
+            let plan = repository.frame_plan(text);
+            assert_eq!(plan.required, vec![FontKey(30)], "{text}");
+            assert!(!plan.unresolved, "{text}");
+            repository
+                .activate_plan(&plan, &mut catalog)
+                .expect("activate CJK");
+            assert_eq!(repository.active_labels(), vec!["latin", "cjk"]);
+            assert_eq!(
+                repository
+                    .preflight_text(text, &mut catalog)
+                    .expect("repeat preflight"),
+                CatalogActivation::Unchanged,
+            );
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn platform_fonts_windows_width_variants_shape_with_lazy_cjk_fallback() {
+        // This native-font regression complements the deterministic routing test.
+        // Minimal Windows installations may not ship the optional CJK font.
+        if !std::path::Path::new(r"C:\Windows\Fonts\msyh.ttc").is_file() {
+            return;
+        }
+        let mut repository = PlatformFontRepository::production_index_for_os("windows");
+        let mut catalog = repository
+            .build_catalog(FontCatalogMode::Lazy)
+            .expect("build primary production catalog");
+        let text = "Ａ！ｦ";
+        repository
+            .preflight_text(text, &mut catalog)
+            .expect("activate width variants");
+        let mut shaper = TerminalShaper::new(
+            FontConfig::new("Cascadia Mono").with_fallbacks(["Microsoft YaHei"]),
+        );
+        // Installed CJK families can cover different subsets. This checks
+        // repository convergence; GPU continuation is tested in window_gpu.
+        for _ in 0..=repository.indexed.len() {
+            let row = shaper
+                .shape_row(&mut catalog, text)
+                .expect("shape width variants");
+            let missing = row
+                .clusters
+                .iter()
+                .filter(|cluster| cluster.is_tofu)
+                .flat_map(|cluster| row.text[cluster.byte_range.clone()].chars())
+                .collect::<Vec<_>>();
+            if missing.is_empty() {
+                assert!(row.glyphs.iter().all(|glyph| !glyph.is_tofu));
+                return;
+            }
+            assert!(
+                matches!(
+                    repository
+                        .activate_missing_glyphs(&missing, &mut catalog)
+                        .expect("activate next installed CJK fallback"),
+                    CatalogActivation::CatalogExpanded { .. }
+                ),
+                "width variants remained missing: {missing:?}; active={:?}",
+                repository.active_labels(),
+            );
+        }
+        panic!("width variants did not converge within the font inventory");
     }
 
     #[test]

@@ -3629,6 +3629,10 @@ impl NativeWindowApp {
         self.metrics_snapshot().json_report()
     }
 
+}
+
+// Keyboard and IME event translation has its own implementation boundary.
+impl NativeWindowApp {
     fn handle_keyboard_input(&mut self, key: &winit::event::KeyEvent) -> io::Result<()> {
         let key_event_kind = KittyKeyEventKind::from_winit_key(key);
         self.handle_keyboard_input_event(

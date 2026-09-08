@@ -473,6 +473,8 @@ T23-COMPATIBILITY-d2fae065530f|crates/rssh-app/src/main.rs|gui_profile_dispatch_
 T23-CONFIG-38e064e45ca5|crates/rssh-app/src/platform_fonts.rs|platform_fonts_windows_index_retains_metadata_but_zero_font_file_bytes|1|rssh-app|platform_fonts::tests|config
 T23-CONFIG-e98d1ef0277f|crates/rssh-app/src/platform_fonts.rs|platform_fonts_ascii_preflight_activates_only_primary_once|1|rssh-app|platform_fonts::tests|config
 T23-CONFIG-0eaa97e287fd|crates/rssh-app/src/platform_fonts.rs|platform_fonts_cjk_and_emoji_activate_minimum_sources_once|1|rssh-app|platform_fonts::tests|config
+T23-CONFIG-1d1b5bc4a6b6|crates/rssh-app/src/platform_fonts.rs|platform_fonts_width_variants_activate_cjk_without_ideographs|1|rssh-app|platform_fonts::tests|config
+T23-CONFIG-859d4a993350|crates/rssh-app/src/platform_fonts.rs|platform_fonts_windows_width_variants_shape_with_lazy_cjk_fallback|1|rssh-app|platform_fonts::tests|config
 T23-CONFIG-f58e6a2ec6ab|crates/rssh-app/src/platform_fonts.rs|platform_fonts_selected_file_is_read_only_once_during_preflight|1|rssh-app|platform_fonts::tests|config
 T23-CONFIG-759c74ecfe54|crates/rssh-app/src/platform_fonts.rs|platform_fonts_emoji_joiners_do_not_activate_an_unrelated_symbol_source|1|rssh-app|platform_fonts::tests|config
 T23-CONFIG-a00f2cb21770|crates/rssh-app/src/platform_fonts.rs|platform_fonts_complex_script_fixtures_shape_without_tofu|1|rssh-app|platform_fonts::tests|config
@@ -4009,6 +4011,7 @@ T23-OVERLAYS-056fbf29d391|crates/rssh-app/src/window_gpu.rs|native_presentation_
 T23-CONFIG-c06e67cb57bd|crates/rssh-app/src/window_gpu.rs|production_fonts_render_covered_scripts_in_one_generation_without_tofu|1|rssh-app|window_gpu::tests|config
 T23-CONFIG-b066a4846879|crates/rssh-app/src/window_gpu.rs|production_fonts_keep_one_generation_per_frame_and_allow_at_most_one_restart|1|rssh-app|window_gpu::tests|config
 T23-PANES-49f7e01d0100|crates/rssh-app/src/window_gpu.rs|gpu_text_frame_late_missing_activates_next_source_and_restarts_without_tofu|1|rssh-app|window_gpu::tests|panes
+T23-PRESENTATION-0d322425b503|crates/rssh-app/src/window_gpu.rs|gpu_text_frame_static_missing_fallback_requests_a_full_followup_until_exhausted|1|rssh-app|window_gpu::tests|presentation
 T23-PRESENTATION-a00aaaf8fbef|crates/rssh-app/src/window_gpu.rs|gpu_text_frame_second_late_missing_stays_tofu_without_a_second_expansion|1|rssh-app|window_gpu::tests|presentation
 T23-PRESENTATION-446f53e190ce|crates/rssh-app/src/window_gpu.rs|gpu_text_frame_invalid_late_fallback_discards_partial_state_before_error|1|rssh-app|window_gpu::tests|presentation
 T23-CONFIG-fb5508b90f38|crates/rssh-app/src/window_gpu.rs|recovery_retires_real_cpu_font_state_before_building_the_replacement|1|rssh-app|window_gpu::tests|config
@@ -4051,6 +4054,7 @@ T23-CONFIG-c1718ce2e711|crates/rssh-app/src/window_parts/diagnostics.rs|diagnost
 T23-CONFIG-1487c76eda0b|crates/rssh-app/src/window_parts/diagnostics.rs|diagnostic_font_marker_rejects_raw_path_keys_recursively|1|rssh-app|diagnostics::tests|config
 T23-CONFIG-d08b81ba01c1|crates/rssh-app/src/window_parts/diagnostics.rs|diagnostic_font_specimen_is_injected_into_the_gpu_snapshot|1|rssh-app|diagnostics::tests|config
 T23-CONFIG-3d7ca8d10ba3|crates/rssh-app/src/window_parts/diagnostics.rs|font_proof_gpu_readiness_followups_are_owner_then_scenario|1|rssh-app|diagnostics::tests|config
+T23-RUNTIME-bff91287e706|crates/rssh-app/src/window_parts/diagnostics.rs|product_gui_probe_requires_connected_gpu_frame_for_ssh1|1|rssh-app|diagnostics::tests|runtime
 T23-PRESENTATION-c9ebdbb92e8a|crates/rssh-app/src/window_parts/functional_observer.rs|snapshot_projects_terminal_layout_modes_and_lifecycle_without_credentials|1|rssh-app|functional_observer::tests|presentation
 T23-PANES-71512c6c3380|crates/rssh-app/src/window_restart_pane_tests.rs|window_app_recognizes_restart_pane_typed_action_query|1|rssh-app|window::window_restart_pane_tests|panes
 T23-PANES-1ba7c8dc4ea2|crates/rssh-app/src/window_restart_pane_tests.rs|restart_pane_command_has_palette_metadata_and_records_frecency|1|rssh-app|window::window_restart_pane_tests|panes
@@ -4139,3 +4143,5 @@ T23-CONFIG-ec0ba5ccf189|crates/rssh-app/src/window.rs|ssh_gui_initial_size_confi
 T23-CONFIG-81b179f74711|crates/rssh-app/src/window.rs|openssh_gui_initial_size_configures_terminal_and_window|1|rssh-app|window::tests|config
 T23-OVERLAYS-74dd7ae692fb|crates/rssh-app/src/window.rs|diagnostic_gpu_backend_defaults_to_none_and_setter_stores_selection|1|rssh-app|window::tests|overlays
 T23-COMPATIBILITY-588159f73e24|crates/rssh-app/src/window.rs|diagnostic_gpu_ready_extra_contains_only_safe_adapter_identity|1|rssh-app|window::tests|compatibility
+T23-COMPATIBILITY-e7a9efb1058a|crates/rssh-app/src/window.rs|product_gui_probe_accepts_the_closed_v1_descriptor|1|rssh-app|window::tests|compatibility
+T23-COMPATIBILITY-f59702c8bd41|crates/rssh-app/src/window.rs|product_gui_probe_rejects_unknown_or_secret_fields|1|rssh-app|window::tests|compatibility
