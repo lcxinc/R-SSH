@@ -518,6 +518,45 @@
     }
 
     #[test]
+    fn cpu_fallback_quarantines_gpu_owners_until_window_close_without_early_abandonment() {
+        let mut app = NativeWindowApp::new(None);
+        for _ in 0..2 {
+            app.gpu = Some(Box::new(
+                crate::window_gpu::WindowGpu::for_manager_close_test(true, true),
+            ));
+            app.activate_cpu_fallback();
+        }
+        app.activate_cpu_fallback();
+        assert!(app.gpu.is_none(), "quarantined devices must not receive rendering or resize work");
+        assert_eq!(app.presentation_owner, PresentationOwner::CpuFallback);
+        assert_eq!(app.quarantined_gpus.len(), 2, "fallback must retain every lost GPU owner");
+        assert!(app.quarantined_gpus.iter().all(|gpu| gpu.metrics().abandoned_lost_surfaces == 0));
+        assert_eq!(app.metrics_snapshot().text_backend, "bitmap-emergency");
+        app.shutdown_gpu_for_window_close();
+        assert!(app.quarantined_gpus.iter().all(|gpu| gpu.metrics().abandoned_lost_surfaces == 1));
+        assert_eq!(app.metrics_snapshot().gpu_abandoned_lost_surfaces, 2);
+        app.shutdown_gpu_for_window_close();
+        assert_eq!(app.metrics_snapshot().gpu_abandoned_lost_surfaces, 2);
+    }
+
+    #[test]
+    fn cpu_fallback_quarantine_uses_native_close_policy_only_at_native_exit() {
+        for eligible in [false, true] {
+            let mut app = NativeWindowApp::new(None);
+            app.gpu = Some(Box::new(
+                crate::window_gpu::WindowGpu::for_manager_close_test(eligible, false),
+            ));
+            app.activate_cpu_fallback();
+            assert_eq!(app.quarantined_gpus.len(), 1);
+            app.shutdown_gpu_for_window_close();
+            app.shutdown_gpu_after_native_window_close();
+            assert!(!app.quarantined_gpus[0].shutdown_after_native_window_close(),
+                "native-close hook must already have finalized eligible owners and leave others to normal Drop");
+            assert_eq!(app.metrics_snapshot().gpu_abandoned_lost_surfaces, 0);
+        }
+    }
+
+    #[test]
     fn deferred_gpu_candidate_resizes_to_the_latest_window_size_before_install() {
         let latest_size = PhysicalSize::new(1_280, 720);
         let mut observed_size = None;

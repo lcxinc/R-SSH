@@ -1236,6 +1236,7 @@ fn prepare_gpu_text_frame(
     )
 }
 
+#[cfg(not(feature = "rterm-legacy-0-1"))]
 fn retire_lost_renderer_before_rebuild<T>(
     lost_renderer: &mut GpuLayerRenderer,
     rebuild: impl FnOnce(&GpuLayerRenderer) -> Result<T, Box<dyn Error>>,
@@ -1246,6 +1247,16 @@ fn retire_lost_renderer_before_rebuild<T>(
             "rebuild GPU renderer after retiring lost CPU font state: {error}"
         ))
         .into()
+    })
+}
+
+#[cfg(feature = "rterm-legacy-0-1")]
+fn retire_lost_renderer_before_rebuild<T>(
+    lost_renderer: &mut GpuLayerRenderer,
+    rebuild: impl FnOnce(&GpuLayerRenderer) -> Result<T, Box<dyn Error>>,
+) -> Result<T, Box<dyn Error>> {
+    crate::rterm_compat_gpu::retire_catalog_before_rebuild(lost_renderer, |retired| {
+        rebuild(retired)
     })
 }
 

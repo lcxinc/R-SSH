@@ -539,6 +539,8 @@ T23-CONFIG-8ab11a53a996|crates/rssh-app/src/rterm_compat_gpu.rs|legacy_gpu_inval
 T23-PLATFORM-e7bea5785aba|crates/rssh-app/src/rterm_compat_gpu.rs|legacy_gpu_same_epoch_replacement_and_resize_rebuild_pixels|1|rssh-app|rterm_compat_gpu::tests|platform
 T23-PRESENTATION-a34824dd17b9|crates/rssh-app/src/rterm_compat_gpu.rs|legacy_gpu_static_missing_glyphs_converge_across_bounded_frames|1|rssh-app|rterm_compat_gpu::tests|presentation
 T23-PRESENTATION-8dc17593cc3b|crates/rssh-app/src/rterm_compat_gpu.rs|legacy_gpu_cleanup_failure_preserves_both_errors_and_cannot_report_a_frame|1|rssh-app|rterm_compat_gpu::tests|presentation
+T23-COMPATIBILITY-9ee3a8d1a687|crates/rssh-app/src/rterm_compat_gpu.rs|legacy_gpu_recovery_releases_catalog_before_rebuilding_on_the_new_device|1|rssh-app|rterm_compat_gpu::tests|compatibility
+T23-RUNTIME-0df37ec3e55a|crates/rssh-app/src/rterm_compat_gpu.rs|legacy_gpu_recovery_failure_keeps_retired_catalog_empty_and_preserves_error|1|rssh-app|rterm_compat_gpu::tests|runtime
 T23-CONFIG-1adf97d0c098|crates/rssh-app/src/rterm_compat.rs|legacy_fonts_batch_advances_one_epoch_and_changes_incarnation|1|rssh-app|rterm_compat::tests|config
 T23-CONFIG-fb32961c0e78|crates/rssh-app/src/rterm_compat.rs|legacy_fonts_bad_tail_never_partially_updates_live_catalog|1|rssh-app|rterm_compat::tests|config
 T23-CONFIG-585a6617ae45|crates/rssh-app/src/rterm_compat.rs|legacy_fonts_recovery_preserves_epoch_but_not_instance|1|rssh-app|rterm_compat::tests|config
@@ -787,6 +789,8 @@ T23-PRESENTATION-535305f94fdf|crates/rssh-app/src/window_compat_tests/part02_tes
 T23-PRESENTATION-0d043ed69f8e|crates/rssh-app/src/window_compat_tests/part02_tests.rs|deferred_gpu_ready_remains_initializing_until_a_presented_frame|1|rssh-app|window::tests|presentation
 T23-COMPATIBILITY-ca6c56863d0b|crates/rssh-app/src/window_compat_tests/part02_tests.rs|gpu_activation_releases_bootstrap_staging_and_cpu_fallback_can_reallocate|1|rssh-app|window::tests|compatibility
 T23-OVERLAYS-b3aee14adef2|crates/rssh-app/src/window_compat_tests/part02_tests.rs|deferred_gpu_initialization_failure_selects_cpu_fallback|1|rssh-app|window::tests|overlays
+T23-PLATFORM-c3db4b9c75ab|crates/rssh-app/src/window_compat_tests/part02_tests.rs|cpu_fallback_quarantines_gpu_owners_until_window_close_without_early_abandonment|1|rssh-app|window::tests|platform
+T23-RUNTIME-15afba79b8e1|crates/rssh-app/src/window_compat_tests/part02_tests.rs|cpu_fallback_quarantine_uses_native_close_policy_only_at_native_exit|1|rssh-app|window::tests|runtime
 T23-PLATFORM-59146e770853|crates/rssh-app/src/window_compat_tests/part02_tests.rs|deferred_gpu_candidate_resizes_to_the_latest_window_size_before_install|1|rssh-app|window::tests|platform
 T23-OVERLAYS-e64a614bcddb|crates/rssh-app/src/window_compat_tests/part02_tests.rs|deferred_gpu_candidate_resize_failure_selects_cpu_fallback|1|rssh-app|window::tests|overlays
 T23-COMPATIBILITY-c888d0783940|crates/rssh-app/src/window_compat_tests/part02_tests.rs|deferred_gpu_worker_runs_off_the_event_loop_thread|1|rssh-app|window::tests|compatibility

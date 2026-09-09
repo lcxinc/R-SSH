@@ -3589,6 +3589,10 @@ impl NativeWindowApp {
         let mut snapshot = self
             .metrics
             .snapshot_with_gpu(&gpu, text_backend, direct_text);
+        for quarantined in &self.quarantined_gpus {
+            snapshot.gpu_abandoned_lost_surfaces = snapshot.gpu_abandoned_lost_surfaces
+                .saturating_add(quarantined.metrics().abandoned_lost_surfaces);
+        }
         "v2-runtime-hub".clone_into(&mut snapshot.runtime_api);
         snapshot.runtime_live_threads = self.runtime.worker().map_or_else(
             || {
@@ -3608,13 +3612,13 @@ impl NativeWindowApp {
     }
 
     fn shutdown_gpu_for_window_close(&mut self) {
-        if let Some(gpu) = self.gpu.as_mut() {
+        for gpu in self.gpu.iter_mut().chain(self.quarantined_gpus.iter_mut()) {
             gpu.shutdown_for_window_close();
         }
     }
 
     fn shutdown_gpu_after_native_window_close(&mut self) {
-        if let Some(gpu) = self.gpu.as_mut() {
+        for gpu in self.gpu.iter_mut().chain(self.quarantined_gpus.iter_mut()) {
             gpu.shutdown_after_native_window_close();
         }
     }

@@ -1472,6 +1472,8 @@ struct NativeWindowApp {
     ssh_secret_prompts: HashMap<rssh_core::PaneId, SshSecretPromptState>,
     ssh_connection_states: HashMap<rssh_core::PaneId, ConnectionState>,
     gpu: Option<Box<WindowGpu>>,
+    #[allow(clippy::vec_box, reason = "retain existing boxed GPU owners without moving their teardown state")]
+    quarantined_gpus: Vec<Box<WindowGpu>>,
     renderer: GpuFramePlanner,
     configured_dpi: Option<u32>,
     dpi_by_screen: BTreeMap<String, u32>,

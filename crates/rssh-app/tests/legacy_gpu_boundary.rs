@@ -1,4 +1,4 @@
-//! Real app-owned full-frame adapter, isolated from unfinished window recovery.
+//! Real app-owned frame and catalog-retirement adapter, isolated from GUI services.
 #![cfg(feature = "rterm-legacy-0-1")]
 #![allow(dead_code, reason = "GPU boundary harness does not run GUI services")]
 

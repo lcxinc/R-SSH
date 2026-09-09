@@ -79,6 +79,25 @@ fn reset_text(
     Ok(())
 }
 
+/// Release the exposed catalog without touching the lost device. Frozen R-Term
+/// does not expose CPU cache retirement: retain its private caches and GPU
+/// handles with the quarantined renderer until the existing safe shutdown path.
+/// Never prepare or present this renderer again, including on rebuild failure.
+pub(crate) fn retire_catalog_before_rebuild<T>(
+    lost_renderer: &mut GpuLayerRenderer,
+    rebuild: impl FnOnce(&mut GpuLayerRenderer) -> Result<T, Box<dyn Error>>,
+) -> Result<T, Box<dyn Error>> {
+    if let Some(catalog) = lost_renderer.text_catalog_mut() {
+        *catalog = rssh_fonts::FontCatalog::new("retired");
+    }
+    rebuild(lost_renderer).map_err(|error| {
+        io::Error::other(format!(
+            "rebuild legacy GPU renderer after releasing catalog (private caches retained): {error}"
+        ))
+        .into()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -350,5 +369,113 @@ mod tests {
         assert!(message.contains("legacy GPU preparation failed"));
         assert!(message.contains("partial-frame cleanup also failed"));
         assert_eq!(message.matches("glyph atlas budget").count(), 2);
+    }
+
+    #[test]
+    fn legacy_gpu_recovery_releases_catalog_before_rebuilding_on_the_new_device() {
+        let mut context =
+            pollster::block_on(GpuContext::new_headless(GpuContextOptions::default())).unwrap();
+        let mut repository = PlatformFontRepository::late_missing_fixture();
+        let mut lost = renderer(&context, &mut repository);
+        let mut terminal = Terminal::new(TerminalSize::new(4, 1));
+        terminal.feed("中文".as_bytes());
+        let snapshot = TerminalRenderSnapshot::from_terminal(&terminal);
+        let geometry = RenderGeometry::new(64, 24, 16, 24);
+        let graph = RenderGraph::new(64, 24);
+        prepare_full_frame(
+            &mut repository,
+            &mut lost,
+            &settings(),
+            &snapshot,
+            geometry,
+            &TextPaintConfig::default(),
+            1.0,
+            1.0,
+        )
+        .unwrap();
+        let before = lost
+            .render_headless_rgba8(&graph, Duration::from_secs(5))
+            .unwrap();
+        let old_catalog = lost.text_catalog_mut().unwrap();
+        let old_incarnation = old_catalog.incarnation();
+        assert!(old_catalog.face_count() > 0);
+        let old_entries = lost.text_atlas_metrics().unwrap().entries;
+        assert!(old_entries > 0);
+        let generation = context.generation();
+        context.inject_device_loss_for_test();
+        let fault = context
+            .run_headless_submission_probe(Duration::from_secs(5))
+            .unwrap_err();
+        assert_eq!(
+            fault.kind(),
+            rterm_render_wgpu::gpu::GpuContextErrorKind::DeviceLost
+        );
+        pollster::block_on(context.recover_device()).unwrap();
+        assert_ne!(context.generation(), generation);
+
+        let mut replacement = retire_catalog_before_rebuild(&mut lost, |retired| {
+            let catalog = retired.text_catalog_mut().unwrap();
+            assert_eq!(
+                catalog.face_count(),
+                0,
+                "catalog must be released before allocating replacement fonts"
+            );
+            assert_ne!(catalog.incarnation(), old_incarnation);
+            // Old private caches and GPU handles stay quarantined, not falsely
+            // reported as discarded or destroyed on the lost device.
+            assert_eq!(retired.text_atlas_metrics().unwrap().entries, old_entries);
+            let mut replacement =
+                GpuLayerRenderer::new(&context, wgpu::TextureFormat::Rgba8Unorm, 64 * 1024)?;
+            let config = settings();
+            replacement.enable_text(
+                repository.rebuild_catalog_from_active(FontCatalogMode::Lazy)?,
+                config.fonts,
+                config.text,
+            )?;
+            Ok(replacement)
+        })
+        .unwrap();
+        let report = prepare_full_frame(
+            &mut repository,
+            &mut replacement,
+            &settings(),
+            &snapshot,
+            geometry,
+            &TextPaintConfig::default(),
+            1.0,
+            1.0,
+        )
+        .unwrap();
+        assert!(report.missing_glyphs.is_empty());
+        assert_eq!(
+            replacement
+                .render_headless_rgba8(&graph, Duration::from_secs(5))
+                .unwrap(),
+            before
+        );
+        assert_eq!(lost.text_catalog_mut().unwrap().face_count(), 0);
+        // Preserve the app's ordering: both renderer owners outlive preparation,
+        // and are released before their context at a safe shutdown boundary.
+        drop(replacement);
+        drop(lost);
+        drop(context);
+    }
+
+    #[test]
+    fn legacy_gpu_recovery_failure_keeps_retired_catalog_empty_and_preserves_error() {
+        let context =
+            pollster::block_on(GpuContext::new_headless(GpuContextOptions::default())).unwrap();
+        let mut repository = PlatformFontRepository::production_index_for_os("test");
+        let mut lost = renderer(&context, &mut repository);
+        for _ in 0..2 {
+            let error = retire_catalog_before_rebuild(&mut lost, |retired| {
+                assert_eq!(retired.text_catalog_mut().unwrap().face_count(), 0);
+                Err::<(), _>(io::Error::other("replacement unavailable").into())
+            })
+            .unwrap_err();
+            assert!(error.to_string().contains("replacement unavailable"));
+            assert!(error.to_string().contains("private caches retained"));
+            assert_eq!(lost.text_catalog_mut().unwrap().face_count(), 0);
+        }
     }
 }

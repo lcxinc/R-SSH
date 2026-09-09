@@ -578,6 +578,7 @@ impl NativeWindowApp {
                 ssh_secret_prompts: HashMap::new(),
                 ssh_connection_states: HashMap::new(),
                 gpu: None,
+                quarantined_gpus: Vec::new(),
                 renderer: {
                     let mut renderer = GpuFramePlanner::new(PixelRenderer::new());
                     renderer.set_reverse_video_cursor_min_contrast(Some(
@@ -7580,7 +7581,11 @@ impl NativeWindowApp {
     }
 
     fn activate_cpu_fallback(&mut self) {
-        self.gpu = None;
+        // A failed recovery may still own driver objects that cannot be safely
+        // destroyed here. Keep them away from present/resize until actual close.
+        if let Some(gpu) = self.gpu.take() {
+            self.quarantined_gpus.push(gpu);
+        }
         self.metrics.mark_renderer(RendererKind::Cpu);
         self.presentation_owner = deferred_gpu_initialization_owner(false);
         self.pending_frame_damage.clear();
