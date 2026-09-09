@@ -467,9 +467,16 @@ T23-PANES-dee82a6242b0|crates/rssh-app/src/local.rs|terminal_output_filter_handl
 T23-RUNTIME-de1e738f14dd|crates/rssh-app/src/main.rs|maps_pty_success_to_process_success|1|rssh-app|crate|runtime
 T23-RUNTIME-18f96b432a78|crates/rssh-app/src/main.rs|maps_pty_failure_to_process_exit_code|1|rssh-app|crate|runtime
 T23-RUNTIME-64fc609b77ec|crates/rssh-app/src/main.rs|maps_large_pty_failure_to_generic_process_failure|1|rssh-app|crate|runtime
+T23-COMPATIBILITY-62da98752cb9|crates/rssh-app/src/main.rs|legacy_profile_rejects_diagnostics_before_starting_services|1|rssh-app|crate|compatibility
 T23-COMPATIBILITY-723a5045502c|crates/rssh-app/src/main.rs|reduced_gui_build_reports_disabled_diagnostic_entrypoints|1|rssh-app|crate|compatibility
 T23-COMPATIBILITY-03a994c24078|crates/rssh-app/src/main.rs|gui_dispatch_preserves_the_process_start_instant|1|rssh-app|crate|compatibility
 T23-COMPATIBILITY-d2fae065530f|crates/rssh-app/src/main.rs|gui_profile_dispatch_preserves_the_process_start_instant|1|rssh-app|crate|compatibility
+T23-CONFIG-e6a49ece57bc|crates/rssh-app/src/platform_fonts.rs|legacy_platform_fonts_consecutive_batches_and_recovery_preserve_state|1|rssh-app|platform_fonts::tests|config
+T23-CONFIG-1c5dd510a208|crates/rssh-app/src/platform_fonts.rs|legacy_platform_fonts_invalid_batch_preserves_repository_and_live_ids|1|rssh-app|platform_fonts::tests|config
+T23-CONFIG-45ea57eecbd9|crates/rssh-app/src/platform_fonts.rs|legacy_platform_fonts_diagnostics_are_explicitly_unsupported|1|rssh-app|platform_fonts::tests|config
+T23-CONFIG-fc48f4632048|crates/rssh-app/src/platform_fonts.rs|legacy_platform_fonts_rejects_mismatched_catalog_without_committing|1|rssh-app|platform_fonts::tests|config
+T23-CONFIG-3a2242a824cd|crates/rssh-app/src/platform_fonts.rs|legacy_platform_fonts_late_fallback_converges_and_width_variants_route_to_cjk|1|rssh-app|platform_fonts::tests|config
+T23-CONFIG-7775336c2eaf|crates/rssh-app/src/platform_fonts.rs|legacy_platform_fonts_diagnostic_modes_cannot_mutate_the_repository|1|rssh-app|platform_fonts::tests|config
 T23-CONFIG-38e064e45ca5|crates/rssh-app/src/platform_fonts.rs|platform_fonts_windows_index_retains_metadata_but_zero_font_file_bytes|1|rssh-app|platform_fonts::tests|config
 T23-CONFIG-e98d1ef0277f|crates/rssh-app/src/platform_fonts.rs|platform_fonts_ascii_preflight_activates_only_primary_once|1|rssh-app|platform_fonts::tests|config
 T23-CONFIG-0eaa97e287fd|crates/rssh-app/src/platform_fonts.rs|platform_fonts_cjk_and_emoji_activate_minimum_sources_once|1|rssh-app|platform_fonts::tests|config

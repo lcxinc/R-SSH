@@ -98,6 +98,16 @@ fn run_command_with_gui<F>(
 where
     F: FnMut(&SshOptions, Instant) -> Result<(), Box<dyn std::error::Error>>,
 {
+    #[cfg(feature = "rterm-legacy-0-1")]
+    if matches!(
+        command,
+        AppCommand::Bench(_)
+            | AppCommand::Doctor(_)
+            | AppCommand::DiagnosticGui(_)
+            | AppCommand::SelfTest(_)
+    ) {
+        return Err(rterm_compat::unsupported_diagnostics());
+    }
     match command {
         #[cfg(feature = "diagnostic-tools")]
         AppCommand::Bench(options) => {
@@ -225,6 +235,37 @@ mod tests {
     #[test]
     fn maps_large_pty_failure_to_generic_process_failure() {
         assert_eq!(pty_status_code(&PtyExitStatus::from_exit_code(300)), 1);
+    }
+
+    #[cfg(feature = "rterm-legacy-0-1")]
+    #[test]
+    fn legacy_profile_rejects_diagnostics_before_starting_services() {
+        for args in [
+            vec!["rssh", "doctor"],
+            vec!["rssh", "bench"],
+            vec!["rssh", "self-test"],
+            vec![
+                "rssh",
+                "diagnostic-gui",
+                "--run-id",
+                "legacy-reject",
+                "--scenario",
+                "empty-window",
+                "--hold-ms",
+                "1",
+            ],
+        ] {
+            let command = crate::cli::parse_args(args).unwrap();
+            let error = run_command_with_gui(command, Instant::now(), &mut |_, _| {
+                panic!("unsupported diagnostics must not open a GUI")
+            })
+            .expect_err("frozen profile cannot produce diagnostic evidence");
+            assert!(error.to_string().contains("legacy-0.1"));
+            assert_eq!(
+                error.downcast_ref::<std::io::Error>().unwrap().kind(),
+                std::io::ErrorKind::Unsupported
+            );
+        }
     }
 
     #[cfg(not(feature = "diagnostic-tools"))]

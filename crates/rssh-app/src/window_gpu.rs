@@ -472,7 +472,7 @@ impl<'a> Stage7WindowAttributionRuntime<'a> {
 
     fn complete_platform_font_index(&mut self) -> Result<(), Box<dyn Error>> {
         let repository = PlatformFontRepository::production_index();
-        let diagnostics = repository.diagnostics();
+        let diagnostics = repository.diagnostics()?;
         self.resources.indexed_font_count =
             project_owned_u64(diagnostics.indexed_source_count, "indexed font count")?;
         self.resources.inactive_font_bytes =
@@ -514,7 +514,7 @@ impl<'a> Stage7WindowAttributionRuntime<'a> {
         if context.render_graph(renderer, &inputs.graph, || {})? != GpuFrameStatus::Presented {
             return Err(io::Error::other("full Stage 7 GPU frame was not presented").into());
         }
-        let diagnostics = repository.diagnostics();
+        let diagnostics = repository.diagnostics()?;
         self.resources.retained_font_bytes =
             project_owned_u64(diagnostics.retained_source_bytes, "retained font bytes")?;
         self.resources.indexed_font_count =
@@ -1434,7 +1434,7 @@ fn prepare_diagnostic_font_catalog(
     let activation_latency_micros =
         u64::try_from(activation_started.elapsed().as_micros()).unwrap_or(u64::MAX);
     let recovered = repository.rebuild_catalog_from_active(catalog_mode)?;
-    let diagnostics = repository.diagnostics();
+    let diagnostics = repository.diagnostics()?;
     let catalog_metrics = catalog.memory_metrics();
     let recovery_metrics = recovered.memory_metrics();
     let exposes_full_inventory = matches!(
@@ -1495,7 +1495,7 @@ fn finalize_diagnostic_font_resource_summary(
     report: &GpuTextPrepareReport,
     summary: &mut DiagnosticFontResourceSummary,
 ) -> Result<(), Box<dyn Error>> {
-    let diagnostics = repository.diagnostics();
+    let diagnostics = repository.diagnostics()?;
     let catalog = renderer
         .text_catalog_mut()
         .ok_or_else(|| io::Error::other("window GPU text catalog is not enabled"))?;
@@ -2581,7 +2581,7 @@ mod tests {
         )
         .expect("derive final evidence from the presented catalog epoch");
 
-        let diagnostics = repository.diagnostics();
+        let diagnostics = repository.diagnostics().expect("modern font diagnostics");
         let catalog = renderer.text_catalog_mut().expect("actual catalog");
         let metrics = catalog.memory_metrics();
         assert_eq!(summary.retained_source_bytes, metrics.retained_source_bytes);
@@ -2655,9 +2655,18 @@ mod tests {
         assert_eq!(report.prepared_rows, [0]);
         assert_eq!(
             report.catalog_generation,
-            repository.diagnostics().generation
+            repository
+                .diagnostics()
+                .expect("modern font diagnostics")
+                .generation
         );
-        assert_eq!(repository.diagnostics().active_source_count, 6);
+        assert_eq!(
+            repository
+                .diagnostics()
+                .expect("modern font diagnostics")
+                .active_source_count,
+            6
+        );
     }
 
     #[test]
@@ -2759,7 +2768,7 @@ mod tests {
         assert_eq!(report.catalog_generation, 3);
         assert_eq!(report.prepared_rows, [0, 1]);
         assert!(report.missing_glyphs.is_empty());
-        let diagnostics = repository.diagnostics();
+        let diagnostics = repository.diagnostics().expect("modern font diagnostics");
         assert_eq!(diagnostics.active_source_count, 3);
         assert_eq!(diagnostics.generation, 3);
     }
@@ -2875,7 +2884,7 @@ mod tests {
 
         assert_eq!(report.catalog_generation, 3);
         assert_eq!(report.missing_glyphs, ['中', '文']);
-        let diagnostics = repository.diagnostics();
+        let diagnostics = repository.diagnostics().expect("modern font diagnostics");
         assert_eq!(diagnostics.active_source_count, 3);
         assert_eq!(diagnostics.generation, 3);
     }

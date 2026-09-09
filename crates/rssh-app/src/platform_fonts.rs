@@ -135,7 +135,7 @@ impl IndexedFont {
         Ok(FontSource::new(self.label, bytes))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, not(feature = "rterm-legacy-0-1")))]
     const fn retains_no_font_bytes(&self) -> bool {
         matches!(
             &self.locator,
@@ -143,12 +143,12 @@ impl IndexedFont {
         )
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, not(feature = "rterm-legacy-0-1")))]
     fn materialization_count(&self) -> usize {
         self.materializations.load(Ordering::Relaxed)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, not(feature = "rterm-legacy-0-1")))]
     fn availability_probe_count(&self) -> usize {
         self.availability_probes.load(Ordering::Relaxed)
     }
@@ -210,6 +210,7 @@ pub(crate) struct PlatformFontRepository {
     )]
     index_fingerprint: [u8; 32],
     catalog_fingerprint: [u8; 32],
+    #[cfg(not(feature = "rterm-legacy-0-1"))]
     catalog_builds: u64,
     generation: u64,
 }
@@ -226,6 +227,7 @@ impl PlatformFontRepository {
             initial_catalog_source_count: 0,
             index_fingerprint,
             catalog_fingerprint,
+            #[cfg(not(feature = "rterm-legacy-0-1"))]
             catalog_builds: 0,
             generation: 0,
         }
@@ -339,7 +341,7 @@ impl PlatformFontRepository {
         )
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, not(feature = "rterm-legacy-0-1")))]
     fn indexed_file_count(&self) -> usize {
         self.indexed
             .iter()
@@ -352,15 +354,19 @@ impl PlatformFontRepository {
         mode: FontCatalogMode,
     ) -> Result<FontCatalog, Box<dyn Error>> {
         match mode {
-            #[cfg(feature = "diagnostic-tools")]
+            #[cfg(all(feature = "diagnostic-tools", not(feature = "rterm-legacy-0-1")))]
             FontCatalogMode::CurrentCopied => self.build_current_copied(),
-            #[cfg(feature = "diagnostic-tools")]
+            #[cfg(all(feature = "diagnostic-tools", not(feature = "rterm-legacy-0-1")))]
             FontCatalogMode::SharedAll => self.build_all_once(),
+            #[cfg(all(feature = "diagnostic-tools", feature = "rterm-legacy-0-1"))]
+            FontCatalogMode::CurrentCopied | FontCatalogMode::SharedAll => {
+                Err(crate::rterm_compat::unsupported_diagnostics())
+            }
             FontCatalogMode::Lazy => self.build_lazy(),
         }
     }
 
-    #[cfg(feature = "diagnostic-tools")]
+    #[cfg(all(feature = "diagnostic-tools", not(feature = "rterm-legacy-0-1")))]
     fn build_current_copied(&mut self) -> Result<FontCatalog, Box<dyn Error>> {
         let mut emergency = Vec::new();
         let mut platform = Vec::new();
@@ -386,7 +392,7 @@ impl PlatformFontRepository {
         Ok(catalog)
     }
 
-    #[cfg(feature = "diagnostic-tools")]
+    #[cfg(all(feature = "diagnostic-tools", not(feature = "rterm-legacy-0-1")))]
     fn build_all_once(&mut self) -> Result<FontCatalog, Box<dyn Error>> {
         let sources = self.materialize_all_in_catalog_order()?;
         let catalog = FontCatalog::from_sources_shared_for_diagnostics(
@@ -412,7 +418,7 @@ impl PlatformFontRepository {
         Ok(catalog)
     }
 
-    #[cfg(feature = "diagnostic-tools")]
+    #[cfg(all(feature = "diagnostic-tools", not(feature = "rterm-legacy-0-1")))]
     fn materialize_all_in_catalog_order(
         &self,
     ) -> Result<Vec<(FontKey, FontSource)>, Box<dyn Error>> {
@@ -440,7 +446,10 @@ impl PlatformFontRepository {
         self.initial_catalog_source_count = initial_catalog_source_count;
         self.catalog_fingerprint =
             active_fingerprint(self.policy_version, &self.activation_order, &self.active);
-        self.catalog_builds = catalog.memory_metrics().catalog_builds;
+        #[cfg(not(feature = "rterm-legacy-0-1"))]
+        {
+            self.catalog_builds = catalog.memory_metrics().catalog_builds;
+        }
         self.generation = catalog.generation();
     }
 
@@ -527,15 +536,40 @@ impl PlatformFontRepository {
             return Ok(CatalogActivation::Unchanged);
         }
         let previous_generation = catalog.generation();
+        #[cfg(not(feature = "rterm-legacy-0-1"))]
         let catalog_generation =
             catalog.load_sources(additions.iter().map(|(_, source)| source.clone()))?;
+        #[cfg(feature = "rterm-legacy-0-1")]
+        let catalog_generation = {
+            if previous_generation != self.generation {
+                return Err(io::Error::other(
+                    "legacy font catalog disagrees with repository epoch",
+                )
+                .into());
+            }
+            let ordered = self
+                .activation_order
+                .iter()
+                .map(|key| {
+                    self.active
+                        .get(key)
+                        .cloned()
+                        .ok_or_else(|| io::Error::other("missing active legacy font source"))
+                })
+                .chain(additions.iter().map(|(_, source)| Ok(source.clone())))
+                .collect::<Result<Vec<_>, _>>()?;
+            crate::rterm_compat::replace_catalog(catalog, &ordered)?
+        };
         for (key, source) in additions {
             self.active.insert(key, source);
             self.activation_order.push(key);
         }
         self.catalog_fingerprint =
             active_fingerprint(self.policy_version, &self.activation_order, &self.active);
-        self.catalog_builds = catalog.memory_metrics().catalog_builds;
+        #[cfg(not(feature = "rterm-legacy-0-1"))]
+        {
+            self.catalog_builds = catalog.memory_metrics().catalog_builds;
+        }
         self.generation = catalog_generation;
         Ok(CatalogActivation::CatalogExpanded {
             previous_generation,
@@ -590,7 +624,7 @@ impl PlatformFontRepository {
             .filter_map(|key| self.active.get(key).cloned())
             .collect::<Vec<_>>();
         match mode {
-            #[cfg(feature = "diagnostic-tools")]
+            #[cfg(all(feature = "diagnostic-tools", not(feature = "rterm-legacy-0-1")))]
             FontCatalogMode::CurrentCopied => {
                 let mut emergency = Vec::new();
                 let mut platform = Vec::new();
@@ -616,12 +650,25 @@ impl PlatformFontRepository {
                 }
                 Ok(catalog)
             }
-            #[cfg(feature = "diagnostic-tools")]
+            #[cfg(all(feature = "diagnostic-tools", not(feature = "rterm-legacy-0-1")))]
             FontCatalogMode::SharedAll => self.rebuild_ordered_catalog_at_current_epoch(&ordered),
+            #[cfg(all(feature = "diagnostic-tools", feature = "rterm-legacy-0-1"))]
+            FontCatalogMode::CurrentCopied | FontCatalogMode::SharedAll => {
+                Err(crate::rterm_compat::unsupported_diagnostics())
+            }
             FontCatalogMode::Lazy => self.rebuild_ordered_catalog_at_current_epoch(&ordered),
         }
     }
 
+    #[cfg(feature = "rterm-legacy-0-1")]
+    fn rebuild_ordered_catalog_at_current_epoch(
+        &self,
+        ordered: &[FontSource],
+    ) -> Result<FontCatalog, Box<dyn Error>> {
+        crate::rterm_compat::rebuild_catalog(ordered, self.generation)
+    }
+
+    #[cfg(not(feature = "rterm-legacy-0-1"))]
     fn rebuild_ordered_catalog_at_current_epoch(
         &self,
         ordered: &[FontSource],
@@ -657,8 +704,13 @@ impl PlatformFontRepository {
         dead_code,
         reason = "the safe resource summary is consumed by the next diagnostic wiring task"
     )]
-    pub(crate) fn diagnostics(&self) -> PlatformFontDiagnostics {
-        PlatformFontDiagnostics {
+    #[cfg(not(feature = "rterm-legacy-0-1"))]
+    #[allow(
+        clippy::unnecessary_wraps,
+        reason = "legacy profile returns an unsupported error through the same boundary"
+    )]
+    pub(crate) fn diagnostics(&self) -> Result<PlatformFontDiagnostics, Box<dyn Error>> {
+        Ok(PlatformFontDiagnostics {
             policy_version: self.policy_version,
             indexed_source_count: self.indexed.len(),
             active_source_count: self.active.len(),
@@ -675,10 +727,19 @@ impl PlatformFontRepository {
                     .values()
                     .map(|source| (source.label.as_str(), source.bytes())),
             ),
-        }
+        })
     }
 
-    #[cfg(test)]
+    #[cfg(feature = "rterm-legacy-0-1")]
+    #[allow(
+        clippy::unused_self,
+        reason = "both profiles expose the same instance diagnostic boundary"
+    )]
+    pub(crate) fn diagnostics(&self) -> Result<PlatformFontDiagnostics, Box<dyn Error>> {
+        Err(crate::rterm_compat::unsupported_diagnostics())
+    }
+
+    #[cfg(all(test, not(feature = "rterm-legacy-0-1")))]
     fn active_labels(&self) -> Vec<&str> {
         self.activation_order
             .iter()
@@ -691,7 +752,7 @@ impl PlatformFontRepository {
             .collect()
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, not(feature = "rterm-legacy-0-1")))]
     fn availability_probe_count(&self) -> usize {
         self.indexed
             .iter()
@@ -750,6 +811,7 @@ fn active_fingerprint(
     terminal_bytes_content_digest(&bytes)
 }
 
+#[cfg(not(feature = "rterm-legacy-0-1"))]
 fn font_inventory_fingerprint<'a>(
     sources: impl IntoIterator<Item = (&'a str, &'a [u8])>,
 ) -> [u8; 32] {
@@ -1054,7 +1116,189 @@ fn emergency_emoji_bytes() -> &'static [u8] {
     include_bytes!("../../../tests/fixtures/fonts/NotoColorEmoji.fixture.ttf")
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rterm-legacy-0-1"))]
+mod tests {
+    use super::*;
+    use rssh_fonts::{FontConfig, TerminalShaper};
+
+    #[test]
+    fn legacy_platform_fonts_consecutive_batches_and_recovery_preserve_state() {
+        let mut repository = PlatformFontRepository::production_index_for_os("test");
+        let mut catalog = repository.build_catalog(FontCatalogMode::Lazy).unwrap();
+        let initial_instance = catalog.incarnation();
+        repository.preflight_text("中文😀", &mut catalog).unwrap();
+        assert_ne!(catalog.incarnation(), initial_instance);
+        assert_eq!(catalog.generation(), 2);
+        let first_instance = catalog.incarnation();
+        repository.preflight_text("سلام", &mut catalog).unwrap();
+        assert_ne!(catalog.incarnation(), first_instance);
+        assert_eq!(catalog.generation(), 3);
+        assert_eq!(repository.active.len(), 4);
+        let order = repository.activation_order.clone();
+        let fingerprint = repository.catalog_fingerprint;
+        let mut recovered = repository
+            .rebuild_catalog_from_active(FontCatalogMode::Lazy)
+            .unwrap();
+        assert_eq!(recovered.generation(), 3);
+        assert_ne!(recovered.incarnation(), catalog.incarnation());
+        assert_eq!(repository.activation_order, order);
+        assert_eq!(repository.catalog_fingerprint, fingerprint);
+        let mut shaper = TerminalShaper::new(FontConfig::new("Noto Sans").with_fallbacks([
+            "Noto Sans SC",
+            "Noto Color Emoji",
+            "Noto Sans Arabic",
+        ]));
+        let before = shaper.shape_row(&mut catalog, "A中😀سلام").unwrap();
+        let after = shaper.shape_row(&mut recovered, "A中😀سلام").unwrap();
+        assert!(after.clusters.iter().all(|cluster| !cluster.is_tofu));
+        assert_eq!(after.cell_count, before.cell_count);
+        assert_eq!(
+            after
+                .clusters
+                .iter()
+                .map(|c| &c.font_family)
+                .collect::<Vec<_>>(),
+            before
+                .clusters
+                .iter()
+                .map(|c| &c.font_family)
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn legacy_platform_fonts_invalid_batch_preserves_repository_and_live_ids() {
+        let mut repository = PlatformFontRepository::new(
+            7,
+            vec![
+                IndexedFont::embedded(
+                    FontKey(1),
+                    "latin",
+                    FontCoverage::Primary,
+                    emergency_latin_bytes(),
+                ),
+                IndexedFont::embedded(FontKey(2), "cjk", FontCoverage::Cjk, emergency_cjk_bytes()),
+                IndexedFont::embedded(FontKey(3), "broken", FontCoverage::Emoji, &[0, 1, 2]),
+            ],
+        );
+        let mut catalog = repository.build_catalog(FontCatalogMode::Lazy).unwrap();
+        let identity = (
+            catalog.incarnation(),
+            catalog.generation(),
+            catalog.face_count(),
+        );
+        let order = repository.activation_order.clone();
+        let fingerprint = repository.catalog_fingerprint;
+        assert!(repository.preflight_text("中😀", &mut catalog).is_err());
+        assert_eq!(
+            (
+                catalog.incarnation(),
+                catalog.generation(),
+                catalog.face_count()
+            ),
+            identity
+        );
+        assert_eq!(repository.activation_order, order);
+        assert_eq!(repository.catalog_fingerprint, fingerprint);
+        assert_eq!(repository.active.len(), 1);
+        repository.preflight_text("中", &mut catalog).unwrap();
+        assert_eq!(catalog.generation(), 2);
+        assert_ne!(catalog.incarnation(), identity.0);
+    }
+
+    #[test]
+    fn legacy_platform_fonts_diagnostics_are_explicitly_unsupported() {
+        let repository = PlatformFontRepository::production_index_for_os("test");
+        let error = repository.diagnostics().unwrap_err();
+        assert!(error.to_string().contains("legacy-0.1"));
+        assert_eq!(
+            error.downcast_ref::<io::Error>().unwrap().kind(),
+            io::ErrorKind::Unsupported
+        );
+    }
+
+    #[test]
+    fn legacy_platform_fonts_rejects_mismatched_catalog_without_committing() {
+        let mut repository = PlatformFontRepository::production_index_for_os("test");
+        let live = repository.build_catalog(FontCatalogMode::Lazy).unwrap();
+        let order = repository.activation_order.clone();
+        let fingerprint = repository.catalog_fingerprint;
+        let mut foreign = FontCatalog::new("en-US");
+        let identity = (
+            foreign.incarnation(),
+            foreign.generation(),
+            foreign.face_count(),
+        );
+        let error = repository.preflight_text("中", &mut foreign).unwrap_err();
+        assert!(error.to_string().contains("repository epoch"));
+        assert_eq!(
+            (
+                foreign.incarnation(),
+                foreign.generation(),
+                foreign.face_count()
+            ),
+            identity
+        );
+        assert_eq!(repository.generation, live.generation());
+        assert_eq!(repository.activation_order, order);
+        assert_eq!(repository.catalog_fingerprint, fingerprint);
+        assert_eq!(repository.active.len(), 1);
+    }
+
+    #[test]
+    fn legacy_platform_fonts_late_fallback_converges_and_width_variants_route_to_cjk() {
+        let mut repository = PlatformFontRepository::late_missing_fixture();
+        let mut catalog = repository.build_catalog(FontCatalogMode::Lazy).unwrap();
+        repository.preflight_text("Ａ！中", &mut catalog).unwrap();
+        assert_eq!(repository.active.len(), 2);
+        let mut shaper =
+            TerminalShaper::new(FontConfig::new("Noto Sans").with_fallbacks(["Noto Sans SC"]));
+        assert!(
+            shaper
+                .shape_row(&mut catalog, "中")
+                .unwrap()
+                .clusters
+                .iter()
+                .any(|c| c.is_tofu)
+        );
+        repository
+            .activate_missing_glyphs(&['中'], &mut catalog)
+            .unwrap();
+        assert_eq!(catalog.generation(), 3);
+        assert!(
+            shaper
+                .shape_row(&mut catalog, "中")
+                .unwrap()
+                .clusters
+                .iter()
+                .all(|c| !c.is_tofu)
+        );
+        assert!(!repository.has_pending_fallbacks(&['中']));
+        let identity = (catalog.incarnation(), catalog.generation());
+        assert_eq!(
+            repository.preflight_text("Ａ！中", &mut catalog).unwrap(),
+            CatalogActivation::Unchanged
+        );
+        assert_eq!((catalog.incarnation(), catalog.generation()), identity);
+    }
+
+    #[cfg(feature = "diagnostic-tools")]
+    #[test]
+    fn legacy_platform_fonts_diagnostic_modes_cannot_mutate_the_repository() {
+        let mut repository = PlatformFontRepository::production_index_for_os("test");
+        for mode in [FontCatalogMode::CurrentCopied, FontCatalogMode::SharedAll] {
+            let error = repository.build_catalog(mode).unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<io::Error>().unwrap().kind(),
+                io::ErrorKind::Unsupported
+            );
+            assert!(repository.active.is_empty());
+            assert_eq!(repository.generation, 0);
+        }
+    }
+}
+
+#[cfg(all(test, not(feature = "rterm-legacy-0-1")))]
 mod tests {
     use std::path::PathBuf;
 
@@ -1109,7 +1353,7 @@ mod tests {
     #[test]
     fn platform_fonts_windows_index_retains_metadata_but_zero_font_file_bytes() {
         let repository = PlatformFontRepository::production_index_for_os("windows");
-        let diagnostics = repository.diagnostics();
+        let diagnostics = repository.diagnostics().expect("modern font diagnostics");
 
         assert_eq!(diagnostics.indexed_source_count, 19);
         assert_eq!(diagnostics.active_source_count, 0);
@@ -1131,7 +1375,7 @@ mod tests {
         let mut catalog = repository
             .build_catalog(FontCatalogMode::Lazy)
             .expect("build lazy ASCII catalog");
-        let initial = repository.diagnostics();
+        let initial = repository.diagnostics().expect("modern font diagnostics");
 
         assert_eq!(repository.active_labels(), vec!["latin"]);
         assert_eq!(initial.active_source_count, 1);
@@ -1142,7 +1386,10 @@ mod tests {
                 .expect("repeat ASCII preflight"),
             CatalogActivation::Unchanged
         );
-        assert_eq!(repository.diagnostics(), initial);
+        assert_eq!(
+            repository.diagnostics().expect("modern font diagnostics"),
+            initial
+        );
     }
 
     #[test]
@@ -1162,7 +1409,7 @@ mod tests {
             }
         );
         assert_eq!(repository.active_labels(), vec!["latin", "cjk", "emoji"]);
-        let activated = repository.diagnostics();
+        let activated = repository.diagnostics().expect("modern font diagnostics");
         assert_eq!(activated.active_source_count, 3);
         assert_eq!(activated.generation, 2);
         let mut shaper = TerminalShaper::new(font_config());
@@ -1177,7 +1424,10 @@ mod tests {
                 .expect("repeat preflight"),
             CatalogActivation::Unchanged
         );
-        assert_eq!(repository.diagnostics(), activated);
+        assert_eq!(
+            repository.diagnostics().expect("modern font diagnostics"),
+            activated
+        );
     }
 
     #[test]
@@ -1393,7 +1643,7 @@ mod tests {
         let mut catalog = repository
             .build_catalog(FontCatalogMode::Lazy)
             .expect("build lazy ASCII catalog");
-        let before = repository.diagnostics();
+        let before = repository.diagnostics().expect("modern font diagnostics");
 
         for _ in 0..3 {
             assert_eq!(
@@ -1402,7 +1652,10 @@ mod tests {
                     .expect("stable missing-glyph preflight"),
                 CatalogActivation::StableMissingGlyph
             );
-            assert_eq!(repository.diagnostics(), before);
+            assert_eq!(
+                repository.diagnostics().expect("modern font diagnostics"),
+                before
+            );
         }
     }
 
@@ -1440,7 +1693,7 @@ mod tests {
             .iter()
             .map(|cluster| cluster.font_id)
             .collect::<Vec<_>>();
-        let before_repository = repository.diagnostics();
+        let before_repository = repository.diagnostics().expect("modern font diagnostics");
         let before_generation = catalog.generation();
         let before_faces = catalog.face_count();
         let before_memory = catalog.memory_metrics();
@@ -1452,7 +1705,10 @@ mod tests {
                 .is_err()
         );
 
-        assert_eq!(repository.diagnostics(), before_repository);
+        assert_eq!(
+            repository.diagnostics().expect("modern font diagnostics"),
+            before_repository
+        );
         assert_eq!(catalog.generation(), before_generation);
         assert_eq!(catalog.face_count(), before_faces);
         assert_eq!(catalog.memory_metrics(), before_memory);
@@ -1476,14 +1732,14 @@ mod tests {
         let mut catalog = repository
             .build_catalog(FontCatalogMode::Lazy)
             .expect("build lazy ASCII catalog");
-        let before = repository.diagnostics();
+        let before = repository.diagnostics().expect("modern font diagnostics");
         let plan = repository.frame_plan("😀中文");
 
         assert_eq!(plan.catalog_fingerprint, before.catalog_fingerprint);
         repository
             .activate_plan(&plan, &mut catalog)
             .expect("activate ordered plan");
-        let after = repository.diagnostics();
+        let after = repository.diagnostics().expect("modern font diagnostics");
         assert_eq!(after.generation, before.generation + 1);
         assert_ne!(after.catalog_fingerprint, before.catalog_fingerprint);
         assert_eq!(repository.active_labels(), vec!["latin", "emoji", "cjk"]);
@@ -1499,14 +1755,17 @@ mod tests {
         repository
             .activation_order
             .retain(|key| *key != FontKey(30));
-        let stable = repository.diagnostics();
+        let stable = repository.diagnostics().expect("modern font diagnostics");
         let invalid = FrameFontPlan {
             required: vec![FontKey(70)],
             catalog_fingerprint: stable.catalog_fingerprint,
             unresolved: false,
         };
         assert!(repository.activate_plan(&invalid, &mut catalog).is_err());
-        assert_eq!(repository.diagnostics(), stable);
+        assert_eq!(
+            repository.diagnostics().expect("modern font diagnostics"),
+            stable
+        );
     }
 
     #[test]
@@ -1623,12 +1882,15 @@ mod tests {
             .preflight_text("中文😀", &mut { catalog })
             .and_then(|_| repository.rebuild_catalog_from_active(FontCatalogMode::Lazy))
             .expect("rebuild from app-owned active repository");
-        let before = repository.diagnostics();
+        let before = repository.diagnostics().expect("modern font diagnostics");
         let rebuilt = repository
             .rebuild_catalog_from_active(FontCatalogMode::Lazy)
             .expect("device-loss catalog rebuild");
 
-        assert_eq!(repository.diagnostics(), before);
+        assert_eq!(
+            repository.diagnostics().expect("modern font diagnostics"),
+            before
+        );
         assert_eq!(rebuilt.memory_metrics().active_source_count, 3);
         assert_eq!(catalog.memory_metrics().active_source_count, 3);
         catalog
@@ -1645,7 +1907,7 @@ mod tests {
         repository
             .preflight_text("中文😀", &mut catalog)
             .expect("activate one fallback batch");
-        let before = repository.diagnostics();
+        let before = repository.diagnostics().expect("modern font diagnostics");
         assert_eq!(before.generation, 2);
         assert_eq!(before.catalog_builds, 2);
         let mut shaper = TerminalShaper::new(font_config());
@@ -1662,7 +1924,10 @@ mod tests {
             recovered.memory_metrics().catalog_builds,
             before.catalog_builds
         );
-        assert_eq!(repository.diagnostics(), before);
+        assert_eq!(
+            repository.diagnostics().expect("modern font diagnostics"),
+            before
+        );
         let recovered_row = shaper
             .shape_row(&mut recovered, "A中😀")
             .expect("shape active sources after recovery");
@@ -1718,7 +1983,7 @@ mod tests {
                 catalog_generation: 3,
             }
         );
-        let after = repository.diagnostics();
+        let after = repository.diagnostics().expect("modern font diagnostics");
         assert_eq!(after.generation, 3);
         assert_eq!(after.catalog_builds, 3);
         assert_eq!(recovered.generation(), after.generation);
@@ -1800,7 +2065,7 @@ mod tests {
         copied
             .build_catalog(FontCatalogMode::CurrentCopied)
             .expect("build copied catalog");
-        let copied_diagnostics = copied.diagnostics();
+        let copied_diagnostics = copied.diagnostics().expect("modern font diagnostics");
         assert_eq!(copied_diagnostics.initial_catalog_source_count, 1);
         assert_eq!(copied_diagnostics.active_source_count, 3);
         assert_eq!(copied_diagnostics.catalog_builds, 3);
@@ -1809,7 +2074,7 @@ mod tests {
         shared
             .build_catalog(FontCatalogMode::SharedAll)
             .expect("build shared catalog");
-        let shared_diagnostics = shared.diagnostics();
+        let shared_diagnostics = shared.diagnostics().expect("modern font diagnostics");
         assert_eq!(shared_diagnostics.initial_catalog_source_count, 3);
         assert_eq!(shared_diagnostics.active_source_count, 3);
         assert_eq!(shared_diagnostics.catalog_builds, 1);
@@ -1818,22 +2083,35 @@ mod tests {
         let mut lazy_catalog = lazy
             .build_catalog(FontCatalogMode::Lazy)
             .expect("build lazy catalog");
-        assert_eq!(lazy.diagnostics().initial_catalog_source_count, 1);
+        assert_eq!(
+            lazy.diagnostics()
+                .expect("modern font diagnostics")
+                .initial_catalog_source_count,
+            1
+        );
         lazy.preflight_text("中文", &mut lazy_catalog)
             .expect("activate one lazy source");
-        let activated = lazy.diagnostics();
+        let activated = lazy.diagnostics().expect("modern font diagnostics");
         assert_eq!(activated.initial_catalog_source_count, 1);
         assert_eq!(activated.active_source_count, 2);
         assert_eq!(activated.catalog_builds, 2);
         lazy.rebuild_catalog_from_active(FontCatalogMode::Lazy)
             .expect("rebuild repository epoch");
-        assert_eq!(lazy.diagnostics().initial_catalog_source_count, 1);
+        assert_eq!(
+            lazy.diagnostics()
+                .expect("modern font diagnostics")
+                .initial_catalog_source_count,
+            1
+        );
     }
 
     #[test]
     fn platform_fonts_diagnostics_expose_only_counts_and_irreversible_digests() {
         let repository = PlatformFontRepository::production_index_for_os("windows");
-        let rendered = format!("{:?}", repository.diagnostics());
+        let rendered = format!(
+            "{:?}",
+            repository.diagnostics().expect("modern font diagnostics")
+        );
 
         assert!(!rendered.contains(r"C:\Windows\Fonts"));
         assert!(!rendered.to_ascii_lowercase().contains("path"));
@@ -1879,7 +2157,7 @@ mod tests {
         let mut catalog = repository
             .build_catalog(production_font_catalog_mode())
             .expect("build production catalog");
-        let before = repository.diagnostics();
+        let before = repository.diagnostics().expect("modern font diagnostics");
 
         for _ in 0..2 {
             assert_eq!(
@@ -1901,7 +2179,10 @@ mod tests {
             );
             assert_eq!(row.glyphs.iter().filter(|glyph| glyph.is_tofu).count(), 1);
             assert_eq!(row.catalog_generation, catalog.generation());
-            assert_eq!(repository.diagnostics(), before);
+            assert_eq!(
+                repository.diagnostics().expect("modern font diagnostics"),
+                before
+            );
         }
     }
 
@@ -1926,7 +2207,10 @@ mod tests {
         );
         assert_eq!(
             shared.memory_metrics().retained_source_bytes,
-            shared_repository.diagnostics().retained_source_bytes
+            shared_repository
+                .diagnostics()
+                .expect("modern font diagnostics")
+                .retained_source_bytes
         );
         for source_index in 0..shared.memory_metrics().active_source_count {
             assert!(shared.diagnostic_fontdb_shares_source_allocation(source_index));
@@ -1940,7 +2224,7 @@ mod tests {
         let lazy = repository
             .build_catalog(FontCatalogMode::Lazy)
             .expect("build lazy diagnostic catalog");
-        let diagnostics = repository.diagnostics();
+        let diagnostics = repository.diagnostics().expect("modern font diagnostics");
 
         assert_eq!(lazy.memory_metrics().active_source_count, 1);
         assert_eq!(diagnostics.active_source_count, 1);
@@ -1964,7 +2248,10 @@ mod tests {
             assert_eq!(recovered.memory_metrics(), initial.memory_metrics());
             assert_eq!(
                 recovered.memory_metrics().retained_source_bytes,
-                repository.diagnostics().retained_source_bytes
+                repository
+                    .diagnostics()
+                    .expect("modern font diagnostics")
+                    .retained_source_bytes
             );
             for source_index in 0..recovered.memory_metrics().active_source_count {
                 assert!(recovered.diagnostic_fontdb_shares_source_allocation(source_index));

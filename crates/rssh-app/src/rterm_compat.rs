@@ -2,6 +2,15 @@ use std::{error::Error, io};
 
 use rssh_fonts::{FontCatalog, FontSource};
 
+#[cfg(feature = "rterm-legacy-0-1")]
+pub(crate) fn unsupported_diagnostics() -> Box<dyn Error> {
+    io::Error::new(
+        io::ErrorKind::Unsupported,
+        "R-Term legacy-0.1 diagnostic-tools are unsupported",
+    )
+    .into()
+}
+
 // The frozen API only exposes single-source mutation. Reconstruct the committed
 // logical epoch on a private catalog; never replay mutations on the live one.
 // Source order is significant, including when a batch added several sources.
