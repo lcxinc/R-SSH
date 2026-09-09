@@ -27,6 +27,8 @@ mod platform_fonts;
 mod profiles;
 #[cfg(any(test, feature = "rterm-legacy-0-1"))]
 mod rterm_compat;
+#[cfg(feature = "rterm-legacy-0-1")]
+mod rterm_compat_gpu;
 mod runtime_composition;
 #[cfg(feature = "transfer-tools")]
 mod scp;

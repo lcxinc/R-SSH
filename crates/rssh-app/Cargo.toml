@@ -63,6 +63,8 @@ wezterm-color-types = "=0.3.0"
 winit = "0.30"
 
 [dev-dependencies]
+# Frozen GPU's headless constructor requires an explicit public texture format.
+wgpu = { version = "=30.0.0", default-features = false, features = ["std"] }
 rterm-runtime = { path = "../rssh-runtime", version = "0.1.0", features = ["test-support"] }
 rssh-test-support = { path = "../rssh-test-support", version = "0.1.0" }
 sha2 = "0.11"

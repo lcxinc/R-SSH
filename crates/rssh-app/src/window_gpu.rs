@@ -27,8 +27,10 @@ use rterm_render_wgpu::gpu::{
 use rterm_render_wgpu::gpu::{GpuInitializationResourceSnapshot, WindowedGpuDevice};
 use winit::{dpi::PhysicalSize, event_loop::OwnedDisplayHandle, window::Window};
 
+#[cfg(not(feature = "rterm-legacy-0-1"))]
+use crate::platform_fonts::CatalogActivation;
 use crate::platform_fonts::{
-    CatalogActivation, FontCatalogMode, PlatformFontRepository, production_font_catalog_mode,
+    FontCatalogMode, PlatformFontRepository, production_font_catalog_mode,
 };
 #[cfg(feature = "diagnostic-tools")]
 use crate::{
@@ -1081,6 +1083,7 @@ struct WindowGpuFrame<'a> {
     dpi_scale: f32,
 }
 
+#[cfg(any(test, not(feature = "rterm-legacy-0-1")))]
 pub(crate) enum CatalogFrameAttempt<T> {
     Prepared(T),
     Expanded(u64),
@@ -1093,6 +1096,7 @@ fn font_fallback_redraw_needed(
     repository.has_pending_fallbacks(&report.missing_glyphs)
 }
 
+#[cfg(any(test, not(feature = "rterm-legacy-0-1")))]
 pub(crate) fn prepare_catalog_frame_with_one_restart<T>(
     mut expected_generation: u64,
     damage: &[DamageRegion],
@@ -1125,6 +1129,7 @@ pub(crate) fn prepare_catalog_frame_with_one_restart<T>(
     clippy::too_many_arguments,
     reason = "one app-owned transaction couples font preflight to one complete GPU text frame"
 )]
+#[cfg(not(feature = "rterm-legacy-0-1"))]
 fn prepare_gpu_text_frame(
     font_repository: &mut PlatformFontRepository,
     renderer: &mut GpuLayerRenderer,
@@ -1195,6 +1200,39 @@ fn prepare_gpu_text_frame(
             };
             Ok(CatalogFrameAttempt::Expanded(catalog_generation))
         },
+    )
+}
+
+#[cfg(feature = "rterm-legacy-0-1")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the legacy adapter preserves the window frame call boundary"
+)]
+fn prepare_gpu_text_frame(
+    font_repository: &mut PlatformFontRepository,
+    renderer: &mut GpuLayerRenderer,
+    snapshot: &TerminalRenderSnapshot,
+    geometry: RenderGeometry,
+    _damage: &[DamageRegion],
+    paint: &TextPaintConfig,
+    dpi_scale: f32,
+    zoom: f32,
+) -> Result<GpuTextPrepareReport, Box<dyn Error>> {
+    crate::rterm_compat_gpu::prepare_full_frame(
+        font_repository,
+        renderer,
+        &crate::rterm_compat_gpu::LegacyTextSettings {
+            fonts: bundled_emergency_font_config(),
+            text: GpuTextConfig::new(
+                4 * 1024 * 1024,
+                rssh_fonts::RasterCacheConfig::new(4 * 1024 * 1024),
+            ),
+        },
+        snapshot,
+        geometry,
+        paint,
+        dpi_scale,
+        zoom,
     )
 }
 
