@@ -54,6 +54,13 @@ the preparer alone fixes the failing rollback check.
 `scripts/ci/tests/test_prepare_rterm_consumer.py`; reuse Task 1 and existing
 release path validation in `scripts/ci/rehearse-rterm-consumer.py`.
 
+Execution refinement: declare the inert app selector here (originally Task 3)
+so a committed real consumer can be prepared for the frozen source. This does
+not implement or enable legacy Rust behavior in ordinary profiles. The CLI
+creates its own new external output checkout instead of accepting permission to
+rewrite an existing one; local worktree edits are never exported. Python 3.11+
+is required (the local bundled Python 3.12 is used, not PATH's Python 3.9).
+
 1. Add real temporary Git fixture tests for both profiles. Assert source trees
    are exact, retained product files match consumer commit, and only the
    allowlisted manifest/lockfile changes occur. Test dirty/untracked/ignored
@@ -78,7 +85,7 @@ create `crates/rssh-app/src/rterm_compat.rs` and its modern/legacy implementatio
 modules as needed; update feature-contract tests only to express the approved
 dual-profile contract.
 
-1. Add the inert app selector and RED tests for legacy ordered transactional
+1. Use the inert selector declared in Task 2 and add RED tests for legacy ordered transactional
    expansion, invalid-source rollback, incarnation-aware invalidation, late
    fallback and explicit unsupported diagnostics. Run modern focused tests and
    compile the same source against frozen packages to observe actual API errors.

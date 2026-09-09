@@ -83,6 +83,14 @@ class ConsumerProfileTests(unittest.TestCase):
         for original in (APP, APP.replace(b"\n", b"\r\n")):
             self.assertEqual(self.module.prepare_app_manifest(original, "modern"), original)
 
+    def test_repository_declares_an_inert_selector_for_verified_preparation(self):
+        original = (ROOT / "crates/rssh-app/Cargo.toml").read_bytes()
+        features = tomllib.loads(original.decode())["features"]
+        self.assertEqual(features.get("rterm-legacy-0-1"), [])
+        self.assertFalse(any("rterm-legacy-0-1" in values for values in features.values()))
+        self.assertEqual(self.module.prepare_app_manifest(original, "modern"), original)
+        self.module.prepare_app_manifest(original, "legacy-0.1")
+
     def test_legacy_changes_exactly_three_feature_arrays(self):
         before = tomllib.loads(APP.decode())
         expected = tomllib.loads(APP.decode())

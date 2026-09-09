@@ -17,6 +17,8 @@ developer-full = [
 ]
 production-gui = ["native-gui", "ssh", "local-pty", "image-basic", "production-fonts"]
 production-fonts = ["rssh-fonts/shared-source-ownership"]
+# Reserved for verified frozen-source preparation; never enabled by normal profiles.
+rterm-legacy-0-1 = []
 native-gui = []
 ssh = []
 local-pty = []
