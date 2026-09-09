@@ -526,6 +526,13 @@ T23-COMMANDS-4c0e879670bc|crates/rssh-app/src/profiles.rs|shows_profile_as_json_
 T23-RUNTIME-c5d4a3a48e6d|crates/rssh-app/src/profiles.rs|ssh_profile_gui_true_maps_to_native_gui_renderer_options|1|rssh-app|profiles::tests|runtime
 T23-RUNTIME-9d648795729f|crates/rssh-app/src/profiles.rs|gui_ssh_profile_prompt_policy_maps_to_interactive_verification|1|rssh-app|profiles::tests|runtime
 T23-RUNTIME-81f6cff0a78a|crates/rssh-app/src/profiles.rs|gui_ssh_profile_rejects_forwarding_and_no_shell|1|rssh-app|profiles::tests|runtime
+T23-CONFIG-1adf97d0c098|crates/rssh-app/src/rterm_compat.rs|legacy_fonts_batch_advances_one_epoch_and_changes_incarnation|1|rssh-app|rterm_compat::tests|config
+T23-CONFIG-fb32961c0e78|crates/rssh-app/src/rterm_compat.rs|legacy_fonts_bad_tail_never_partially_updates_live_catalog|1|rssh-app|rterm_compat::tests|config
+T23-CONFIG-585a6617ae45|crates/rssh-app/src/rterm_compat.rs|legacy_fonts_recovery_preserves_epoch_but_not_instance|1|rssh-app|rterm_compat::tests|config
+T23-CONFIG-4189774354ea|crates/rssh-app/src/rterm_compat.rs|legacy_fonts_recovery_invalidates_cached_ids_at_the_same_epoch|1|rssh-app|rterm_compat::tests|config
+T23-CONFIG-1daa262d6819|crates/rssh-app/src/rterm_compat.rs|legacy_fonts_replay_preserves_source_order_at_every_epoch|1|rssh-app|rterm_compat::tests|config
+T23-CONFIG-cf0fc5641870|crates/rssh-app/src/rterm_compat.rs|legacy_fonts_rejects_unreconstructable_epochs|1|rssh-app|rterm_compat::tests|config
+T23-CONFIG-c57894dc5bce|crates/rssh-app/src/rterm_compat.rs|legacy_fonts_late_cjk_reuses_shaper_without_stale_tofu|1|rssh-app|rterm_compat::tests|config
 T23-INPUT-29417355a4d6|crates/rssh-app/src/runtime_composition.rs|cloned_compositions_share_one_lazy_ssh_runtime_without_initializing_it|1|rssh-app|runtime_composition::tests|input
 T23-INPUT-9b0c14f48539|crates/rssh-app/src/runtime_composition.rs|scheduled_runtime_continuation_wakes_the_window_without_another_transport_notice|1|rssh-app|runtime_composition::tests|input
 T23-INPUT-fe6c138d4a0e|crates/rssh-app/src/runtime_composition.rs|close_drains_every_published_runtime_batch_before_closed_event|1|rssh-app|runtime_composition::tests|input
