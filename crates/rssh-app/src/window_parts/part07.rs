@@ -1414,12 +1414,20 @@ struct NativeDiagnosticGuiState {
     absolute_deadline: Instant,
     pending_secret: Option<String>,
     secret_prompt_presented: bool,
+    font_mode: Option<rssh_diagnostics::DiagnosticFontMode>,
+    font_specimen: Option<rssh_diagnostics::DiagnosticFontSpecimen>,
+    scenario_ready_requires_gpu: bool,
 }
 
 enum NativeStartupMode {
     Normal,
     Benchmark,
     Diagnostic(NativeDiagnosticGuiState),
+}
+
+struct NativeStartupState {
+    mode: NativeStartupMode,
+    diagnostic_gpu_backend: Option<rssh_diagnostics::DiagnosticGpuBackend>,
 }
 
 #[allow(clippy::struct_excessive_bools)]
@@ -1451,10 +1459,9 @@ struct NativeWindowApp {
     bootstrap_surface: Option<WindowBootstrapSurface>,
     bootstrap_frame: Vec<u8>,
     renderer_mode: RendererMode,
-    diagnostic_gpu_backend: Option<rssh_diagnostics::DiagnosticGpuBackend>,
     presentation_owner: PresentationOwner,
     deferred_gpu_generation: u64,
-    startup_mode: NativeStartupMode,
+    startup: NativeStartupState,
     transport_start_requested: bool,
     // Prompts are keyed by pane so a slow host-key or secret decision in one
     // SSH pane cannot overwrite another pane's independent connection.
@@ -1465,6 +1472,8 @@ struct NativeWindowApp {
     ssh_secret_prompts: HashMap<rssh_core::PaneId, SshSecretPromptState>,
     ssh_connection_states: HashMap<rssh_core::PaneId, ConnectionState>,
     gpu: Option<Box<WindowGpu>>,
+    #[allow(clippy::vec_box, reason = "retain existing boxed GPU owners without moving their teardown state")]
+    quarantined_gpus: Vec<Box<WindowGpu>>,
     renderer: GpuFramePlanner,
     configured_dpi: Option<u32>,
     dpi_by_screen: BTreeMap<String, u32>,
@@ -2221,6 +2230,13 @@ impl NativeWindowManager {
             self.finish_deferred_startup_after_config();
             return;
         };
+        if crate::stage7_attribution::audit_product_service_start(
+            crate::stage7_attribution::ProductServiceEntry::DeferredConfig,
+        )
+        .is_err()
+        {
+            return;
+        }
         let task = lifecycle.reload_task();
         let event_proxy = self
             .windows
@@ -2370,6 +2386,13 @@ impl NativeWindowManager {
         let Some(event_proxy) = event_proxy else {
             return;
         };
+        if crate::stage7_attribution::audit_product_service_start(
+            crate::stage7_attribution::ProductServiceEntry::ConfigWatcher,
+        )
+        .is_err()
+        {
+            return;
+        }
         if let Some(lifecycle) = self.config_lifecycle.as_mut()
             && let Err(diagnostic) = lifecycle.install_watcher_sink(Arc::new(move || {
                 event_proxy
@@ -2884,16 +2907,16 @@ impl NativeWindowManager {
 
     fn shutdown_gpu_for_application_exit(&mut self) {
         if let Some(startup) = self.startup_app.as_mut() {
-            startup.shutdown_gpu_for_window_close();
+            startup.shutdown_gpu_after_native_window_close();
         }
         for app in self.windows.values_mut() {
-            app.shutdown_gpu_for_window_close();
+            app.shutdown_gpu_after_native_window_close();
         }
         for app in &mut self.pending_apps {
-            app.shutdown_gpu_for_window_close();
+            app.shutdown_gpu_after_native_window_close();
         }
         for app in &mut self.retired_apps {
-            app.shutdown_gpu_for_window_close();
+            app.shutdown_gpu_after_native_window_close();
         }
     }
 

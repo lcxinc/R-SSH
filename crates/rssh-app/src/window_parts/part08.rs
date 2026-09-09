@@ -567,15 +567,18 @@ impl NativeWindowApp {
                 // the SSH GUI entry point overrides this with the requested
                 // hybrid/cpu mode before the event loop starts.
                 renderer_mode: RendererMode::Gpu,
-                diagnostic_gpu_backend: None,
                 presentation_owner: PresentationOwner::Bootstrap,
                 deferred_gpu_generation: 0,
-                startup_mode: NativeStartupMode::Normal,
+                startup: NativeStartupState {
+                    mode: NativeStartupMode::Normal,
+                    diagnostic_gpu_backend: None,
+                },
                 transport_start_requested: false,
                 ssh_host_key_prompts: HashMap::new(),
                 ssh_secret_prompts: HashMap::new(),
                 ssh_connection_states: HashMap::new(),
                 gpu: None,
+                quarantined_gpus: Vec::new(),
                 renderer: {
                     let mut renderer = GpuFramePlanner::new(PixelRenderer::new());
                     renderer.set_reverse_video_cursor_min_contrast(Some(
@@ -760,7 +763,7 @@ impl NativeWindowApp {
     }
 
     fn set_benchmark_startup(&mut self, enabled: bool) {
-        self.startup_mode = if enabled {
+        self.startup.mode = if enabled {
             NativeStartupMode::Benchmark
         } else {
             NativeStartupMode::Normal
@@ -7405,14 +7408,17 @@ impl NativeWindowApp {
             self.webgpu_force_fallback_adapter,
             matches!(self.front_end, NativeRenderFrontEnd::Software),
         );
-        if let Some(backend) = self.diagnostic_gpu_backend {
-            pollster::block_on(WindowGpu::new_with_diagnostic_backend(
+        let (font_mode, font_specimen) = self.diagnostic_font_options();
+        if self.startup.diagnostic_gpu_backend.is_some() || font_mode.is_some() {
+            pollster::block_on(WindowGpu::new_with_diagnostic_options(
                 event_loop.owned_display_handle(),
                 window,
                 size,
                 high_performance,
                 force_fallback_adapter,
-                Some(backend),
+                self.startup.diagnostic_gpu_backend,
+                font_mode,
+                font_specimen,
             ))
         } else {
             pollster::block_on(WindowGpu::new(
@@ -7434,6 +7440,13 @@ impl NativeWindowApp {
             return;
         }
 
+        if let Err(error) = crate::stage7_attribution::audit_product_service_start(
+            crate::stage7_attribution::ProductServiceEntry::PostReadyCoordinator,
+        ) {
+            eprintln!("deferred GPU initialization blocked by scheduling audit: {error}");
+            self.activate_cpu_fallback();
+            return;
+        }
         self.presentation_owner = PresentationOwner::GpuInitializing;
         self.deferred_gpu_generation = self.deferred_gpu_generation.saturating_add(1);
         let generation = self.deferred_gpu_generation;
@@ -7462,14 +7475,17 @@ impl NativeWindowApp {
             self.webgpu_force_fallback_adapter,
             matches!(self.front_end, NativeRenderFrontEnd::Software),
         );
-        let prepared_gpu = match if let Some(backend) = self.diagnostic_gpu_backend {
-            WindowGpu::prepare_with_diagnostic_backend(
+        let (font_mode, font_specimen) = self.diagnostic_font_options();
+        let prepared_gpu = match if self.startup.diagnostic_gpu_backend.is_some() || font_mode.is_some() {
+            WindowGpu::prepare_with_diagnostic_options(
                 display,
                 window,
                 surface_size,
                 high_performance,
                 force_fallback_adapter,
-                Some(backend),
+                self.startup.diagnostic_gpu_backend,
+                font_mode,
+                font_specimen,
             )
         } else {
             WindowGpu::prepare(
@@ -7565,7 +7581,11 @@ impl NativeWindowApp {
     }
 
     fn activate_cpu_fallback(&mut self) {
-        self.gpu = None;
+        // A failed recovery may still own driver objects that cannot be safely
+        // destroyed here. Keep them away from present/resize until actual close.
+        if let Some(gpu) = self.gpu.take() {
+            self.quarantined_gpus.push(gpu);
+        }
         self.metrics.mark_renderer(RendererKind::Cpu);
         self.presentation_owner = deferred_gpu_initialization_owner(false);
         self.pending_frame_damage.clear();
@@ -7606,7 +7626,7 @@ impl NativeWindowApp {
         let surface_geometry = self.render_geometry();
         let placement = self.frame_content_placement();
         let geometry = self.frame_render_geometry(surface_geometry, placement);
-        let snapshot = self.render_snapshot();
+        let snapshot = self.with_diagnostic_font_specimen(self.render_snapshot());
         self.metrics.record_terminal_linkage_snapshot(&snapshot);
         if self.final_linkage_frame_is_reserved() {
             return;
